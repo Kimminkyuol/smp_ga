@@ -1,24 +1,30 @@
 import random
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pygad
 
 
 class SMP:
-    num_pairs = 4
+    num_pairs = 0
     num_generations = 100
 
-    solution_per_population = 100
+    solution_per_population = 50
 
     num_parents_mating = 10
-    crossover_probability = 0.5
-    mutation_probability = 0.8
+    crossover_probability = 0.1
+    mutation_probability = 0.9
 
     pm, pw = None, None
 
     initial_population = None
 
-    def __init__(self, pm, pw):
+    fitness = np.full((num_generations, 4), 0, dtype=np.float32)
+    idx = -1
+
+    def __init__(self, num_pairs, pm, pw):
+        self.num_pairs = num_pairs
+
         self.pm = pm
         self.pw = pw
 
@@ -62,10 +68,16 @@ class SMP:
         hap = (hapm + hapw) / self.num_pairs  # 커플당 총 행복
         ehap = abs(hapm - hapw) / self.num_pairs  # 커플당 평등적(egalitarian) 총 행복 (남녀간 총 행복 행복 차이)
 
+        fitness = num_stable_pair + hap - ehap
+
+        l_fitness = self.fitness[self.idx]
+        if l_fitness[3] == 0 or l_fitness[3] < fitness:
+            self.fitness[self.idx] = (num_stable_pair, hap, ehap, fitness)
+
         # 1. 안정적 쌍의 수 최대화 (+)
         # 2. 커플당 총 행복 최대화 (+)
         # 3. 커플당 평등적 총 행복 최소화 (남녀간 총 행복 차이 최소화) (-)
-        return num_stable_pair + hap - ehap
+        return fitness
 
     def crossover_func(self, parents, offspring_size, _):
         """
@@ -157,6 +169,21 @@ class SMP:
         idx = np.random.choice(len(fitness), num_parents, p=selection_probs)  # 계산된 확률에 따라 지정된 수 만큼의 원소 추출
         return ga_instance.population[idx], idx
 
+    def on_fitness(self, _, __):
+        if self.idx % 100 == 0:
+            print(self.idx)
+
+        self.idx += 1
+
+    def plot_fitness(self):
+        x = np.arange(self.fitness.shape[0])
+        plt.plot(x, self.fitness[:, 0], label="stable pairs")
+        plt.plot(x, self.fitness[:, 1], label="hap")
+        plt.plot(x, self.fitness[:, 2], label="ehap")
+        plt.plot(x, self.fitness[:, 3], label="fitness")
+        plt.legend()
+        plt.show()
+
     def get_ga_instance(self):
         return pygad.GA(num_generations=self.num_generations,
                         initial_population=self.initial_population,
@@ -169,33 +196,45 @@ class SMP:
                         fitness_func=self.fitness_func,
                         crossover_type=self.crossover_func,
                         mutation_type=self.mutation_func,
-                        parent_selection_type=self.parent_selection_func,
+                        # parent_selection_type=self.parent_selection_func,
+                        parent_selection_type="sss",
+                        on_fitness=self.on_fitness,
                         gene_space=list(range(self.num_pairs)))
 
 
 if __name__ == '__main__':
     # 여성에 대한 남성의 선호도 목록
-    _pm = np.array([
-        [0, 3, 2, 1],
-        [0, 1, 2, 3],
-        [1, 3, 2, 0],
-        [2, 0, 1, 3]
-    ])
+    # _pm = np.array([
+    #     [0, 3, 2, 1],
+    #     [0, 1, 2, 3],
+    #     [1, 3, 2, 0],
+    #     [2, 0, 1, 3]
+    # ])
+    #
+    # # 남성에 대한 여성의 선호도 목록
+    # _pw = np.array([
+    #     [2, 0, 1, 3],
+    #     [0, 3, 2, 1],
+    #     [1, 3, 2, 0],
+    #     [3, 1, 0, 2]
+    # ])
 
-    # 남성에 대한 여성의 선호도 목록
-    _pw = np.array([
-        [2, 0, 1, 3],
-        [0, 3, 2, 1],
-        [1, 3, 2, 0],
-        [3, 1, 0, 2]
-    ])
+    _num_pairs = 30
 
-    smp = SMP(_pm, _pw)
+    _pm = np.array([sorted(np.array(range(_num_pairs)), key=lambda k: random.random()) for i in range(_num_pairs)])
+    _pw = np.array([sorted(np.array(range(_num_pairs)), key=lambda k: random.random()) for i in range(_num_pairs)])
+
+    print(_pm)
+    print()
+    print(_pw)
+
+    smp = SMP(_num_pairs, _pm, _pw)
 
     _ga_instance = smp.get_ga_instance()
     _ga_instance.run()
 
-    # ga_instance.plot_fitness()
+    _ga_instance.plot_fitness()
+    smp.plot_fitness()
 
     _solution, _solution_fitness, _solution_idx = _ga_instance.best_solution()
     print("Parameters of the best solution : {solution}".format(solution=_solution))
