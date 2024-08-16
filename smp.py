@@ -156,7 +156,7 @@ class SMP:
     def parent_selection_func(fitness, num_parents, ga_instance):
         """
         염색체를 무작위로 추출
-        룰렛휠 선택을 사용함
+        steady-state 선택을 사용함
 
         Args:
             fitness: 적합도 평가 점수
@@ -165,9 +165,15 @@ class SMP:
         return: 선택된 부모
         """
 
-        selection_probs = fitness / sum(fitness)  # 각 개체의 적합도를 전체 적합도의 합계로 나누어 각 개체의 선택 확률을 계산함
-        idx = np.random.choice(len(fitness), num_parents, p=selection_probs)  # 계산된 확률에 따라 지정된 수 만큼의 원소 추출
-        return ga_instance.population[idx], idx
+        fitness_sorted = sorted(range(len(fitness)), key=lambda k: fitness[k])  # fitness에 따라 오름차순(작은것->큰것)으로 index 정렬
+        fitness_sorted.reverse()  # 리스트 뒤집기 (내림차순 정렬, 큰것->작은것)
+
+        parents = np.empty((num_parents, ga_instance.population.shape[1]))  # 부모 개체 저장할 리스트
+
+        for parent_num in range(num_parents):  # 선택해야 할 부모 수만큼 반복
+            parents[parent_num, :] = ga_instance.population[fitness_sorted[parent_num], :].copy()  # fitness 큰 유전자 부터 리스트에 저장
+
+        return parents, np.array(fitness_sorted[:num_parents])
 
     def on_fitness(self, _, __):
         if self.idx % 100 == 0:
@@ -196,8 +202,7 @@ class SMP:
                         fitness_func=self.fitness_func,
                         crossover_type=self.crossover_func,
                         mutation_type=self.mutation_func,
-                        # parent_selection_type=self.parent_selection_func,
-                        parent_selection_type="sss",
+                        parent_selection_type=self.parent_selection_func,
                         on_fitness=self.on_fitness,
                         gene_space=list(range(self.num_pairs)))
 
